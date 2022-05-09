@@ -1,5 +1,6 @@
 (import (r7rs))
 (import (chicken random))
+(import (chicken time))
 
 ;chapter1
 ;手続きによる抽象の構築
@@ -299,7 +300,7 @@
 (print (prime? 13))
 
 
-;Fermatテスト
+;Fermat(フェルマー)テスト
 
 ;Fermetの小定理
 ;nを素数、aをnより小さい正の整数とすると、a^n/nの余りと a/nの余りが同じ
@@ -334,9 +335,136 @@
 (print (smallest-divisor 1999))  ;1999
 (print (smallest-divisor 19999)) ;7
 
+;1.22
+(define (timed-prime-test n)
+	(newline)
+	(display n)
+	(start-prime-test n (current-process-milliseconds)))
+
+(define (start-prime-test n start-time)
+	(if (prime? n)
+		(report-prime (- (current-process-milliseconds) start-time))))
+
+(define (report-prime elapsed-time)
+	(display " *** ")
+	(display elapsed-time)
+	(newline))
 
 
+(timed-prime-test 134)
+(timed-prime-test 2147483647)
+
+(define (search-for-primes start)
+	(define (iter i c)
+		(cond
+			((= c 3))
+			((prime? i) (print i) (iter (+ i 2) (+ c 1)))
+			(else (iter (+ i 2) c))))
+	(if (even? start)
+		(iter (+ start 1) 0)
+		(iter start 0)))
 
 
+(define (timed-search-for-primes start)
+	(let ((start-time (current-process-milliseconds)))
+		(search-for-primes start)
+		(print "time: " (- (current-process-milliseconds) start-time))))
 
+(timed-search-for-primes 1000)
+(timed-search-for-primes 10000)
+(timed-search-for-primes 100000)
+(timed-search-for-primes 1000000)
+
+
+;1.23, 1.24
+(define (smallest-divisor2 n)
+	(define (next n)
+		(if (= n 2) 3 (+ n 2)))
+	(define (find-divisor n i)
+		(cond
+			((> (square i) n) n)
+			((= (remainder n i) 0) i)
+			(else (find-divisor n (next i)))))
+	(find-divisor n 2))
+
+(define (prime?v2 n)
+	(if (< n 2)
+		#f
+		(= n (smallest-divisor2 n))))
+
+
+(define (timed-search-primes start prime?proc)
+	(let ((start-time (current-process-milliseconds)))
+		(search-primes start prime?proc)
+		(print "time: " (- (current-process-milliseconds) start-time))))
+
+(define (search-primes start prime?proc)
+	(define (iter i c)
+		(cond
+			((= c 3))
+			((prime?proc i) (print i) (iter (+ i 2) (+ c 1)))
+			(else (iter (+ i 2) c))))
+	(if (even? start)
+		(iter (+ start 1) 0)
+		(iter start 0)))
+
+
+(define (prime?v3 n) (fast-prime? n 10))
+
+(timed-search-primes 10000000000 prime?)
+(timed-search-primes 10000000000 prime?v2)
+(timed-search-primes 10000000000 prime?v3)
+
+
+;1.27
+;Fermetテストをだます Carmichael数
+(define (carmichael-test n)
+	(define (iter i c)
+		(cond 
+			((= i n) c)
+			((= (expmod i n n) i) (iter (+ i 1) (+ c 1)))
+			(else (iter (+ i 1) c))))
+	(iter 1 0))
+
+(print (carmichael-test 561))
+(print (carmichael-test 1105))
+(print (carmichael-test 1729))
+(print (carmichael-test 2465))
+(print (carmichael-test 2821))
+(print (carmichael-test 6601))
+
+
+;1.28
+;Miller-Rabinテスト(だまされないFermetテスト)
+
+;a^n/nの計算
+(define (expmod2 base ex m)
+	(cond 
+		((= ex 0) 1)
+		((even? ex) 
+			(let ((x (remainder (square (expmod2 base (/ ex 2) m)) m)))
+				(if (and (not (= x 1)) 
+						(not (= x (- m 1))) 
+						(= (remainder (square x) m) 1))
+					0
+					x)))
+		(else (remainder (* base (expmod2 base (- ex 1) m)) m))))
+
+
+(define (miller-rabin-test n)
+	(define (try-it a)
+		(= (expmod2 a n n) a))
+	(try-it (+ 1 (pseudo-random-integer (- n 1)))))
+
+
+(define (fast-prime?v2 n times)
+	(cond 
+		((= times 0) #t)
+		((miller-rabin-test n) (fast-prime?v2 n (- times 1)))
+		(else #f)))
+
+(print (fast-prime? 561 10))
+(print (fast-prime? 2147483647 10))
+(print (fast-prime?v2 561 10))
+(print (fast-prime?v2 2147483647 10))
 

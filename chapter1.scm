@@ -467,4 +467,3 @@
 (print (fast-prime? 2147483647 10))
 (print (fast-prime?v2 561 10))
 (print (fast-prime?v2 2147483647 10))
-

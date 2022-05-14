@@ -197,3 +197,243 @@
 	(filtered-accumulate coprime? * 1 identity 1 inc n))
 
 (print (product-coprimes-under 10))
+
+
+;不動点
+;xがf(x)=xを満たすとき、xを関数fの不動点という
+;最初の予測値から、fを値があまり変わらなくなるまで繰り返し作用させることで不動点を見つける
+(define (fixed-point f first-guess)
+	(define (close-enough? v1 v2)
+		(< (abs (- v1 v2)) 0.00001))
+	(define (try guess)
+		(let ((next (f guess)))
+			(if (close-enough? guess next)
+				next
+				(try next))))
+	(try first-guess))
+
+(print (fixed-point cos 1.0))  ;cosx=xとなるx
+(print (fixed-point (lambda (y) (+ (sin y) (cos y))) 1.0)) 
+
+;不動点プロセスを平方根の計算に応用
+;y^2=xとなるyを探す -> y=x/yの不動点を探す
+;ただし、下の記述は予測値の振動が収束しない
+#|
+(define (sqrt1 x)
+	(fixed-point (lambda (y) (/ x y))
+		1.0))
+|#
+
+
+;平均緩和法(average damping)
+;不動点探索で収束を助けることが多い
+;予測値の大きな変化を防ぐ
+;次の予測値をx/yではなく、1/2(y+x/y)とする(両辺にyを足して2で割る)
+(define (sum-of ls)
+	(define (iter result ls)
+		(if (null? ls)
+			result
+			(iter (+ (car ls) result) (cdr ls))))
+	(iter 0 ls))
+
+
+(define (average . a)
+	(/ (sum-of a) (length a)))
+
+
+(define (sqrt2 x)
+	(fixed-point (lambda (y) (average y (/ x y)))
+		1.0))
+
+(print (sqrt2 2))
+(print (sqrt2 9))
+
+;1.35
+(print (fixed-point (lambda (y) (+ 1 (/ 1 y))) 1.0))
+(print (fixed-point (lambda (y) (average y (+ 1 (/ 1 y)))) 1.0))
+
+
+;1.36
+;x^x=1000の解
+;-> x=log(1000)/log(x)の不動点を求める
+(print "Fixed-Point")
+(define (fixed-point-print f first-guess)
+	(define (close-enough? v1 v2)
+		(< (abs (- v1 v2)) 0.00001))
+	(define (try guess)
+		(print guess)
+		(let ((next (f guess)))
+			(if (close-enough? guess next)
+				next
+				(try next))))
+	(print (try first-guess)))
+
+(fixed-point-print (lambda (x) (/ (log 1000) (log x))) 5.0)
+
+(print "Fixed-Point (平均緩和)")
+(fixed-point-print 
+  (lambda (x) (average x (/ (log 1000) (log x)))) 5.0)
+
+
+;ニュートン法でもやってみる
+;f(x)=0となるxを求める
+;Xn+1=Xn-f(Xn)/f'(Xn)
+;x^x=1000の解
+;x^x-1000=0 -> f(x)=x^x-1000
+;Xn+1=Xn-(x^x-1000)/x^x*(logx+1)
+(print "Newton")
+(define (newton-print f first-guess)
+	(fixed-point-print f first-guess)
+	(define (close-enough? guess x)
+		(< (abs (- guess x)) 0.00001))
+	(define (try guess)
+		(print guess)
+		(let ((next (f guess)))
+			(if (close-enough? guess next)
+				next
+				(try next))))
+	(print (try first-guess)))
+
+(newton-print 
+	(lambda (x) 
+		(- x (/ (- (expt x x) 1000) 
+			    (* (expt x x) (+ (log x) 1)))))
+	5.0)
+
+#|
+(define (newton-print f first-guess)
+	(fixed-point-print f first-guess)
+|#
+
+
+;1.37
+(define (cont-frac ni di k)
+	(define (iter i k)
+		(if (> i k)
+			0
+			(/ (ni i) (+ (di i) (iter (+ i 1) k)))))
+	(iter 1 k))
+
+(print (cont-frac (lambda (i) 1.0)
+	              (lambda (i) 1.0)
+	              100))
+
+
+(define (cont-frac2 ni di k)
+	(define (iter result i)
+		(if (zero? i)
+			result
+			(iter (/ (ni i) (+ (di i) result)) (- i 1))))
+	(iter 0 k))
+
+(print (cont-frac2 (lambda (i) 1.0)
+	               (lambda (i) 1.0)
+	               100))
+
+
+;1.38
+(define (e-frac i)
+	(let ((x (+ i 1)))
+		(if (= (remainder x 3) 0)
+			(* (/ x 3) 2)
+			1)))
+
+(print (cont-frac (lambda (i) 1.0) 
+	              e-frac 
+	              100))
+
+
+;1.39
+(define (tan-cf x k)
+	(* 1.0 (cont-frac (lambda (i) (if (= i 1) x (* -1 x x))) 
+		              (lambda (i) (- (* 2 i) 1)) 
+		              k)))
+
+(print (tan-cf 1 100))
+(print (tan-cf 1.0472 100))
+(print (tan-cf -1 100))
+
+
+;微分
+(define dx 0.00001)
+
+(define (derive g)
+	(lambda (x)
+		(/ (- (g (+ x dx)) (g x))
+			dx)))
+
+
+(define (cube x)
+	(* x x x))
+
+;f(x)=x^3 ... f'(5)
+(print ((derive cube) 5))
+
+;g(x)-> f(x)=x-g(x)/g'(x) 
+(define (newton-transform g)
+	(lambda (x)
+		(- x (/ (g x) ((derive g) x)))))
+
+
+(define (newtons-method g guess)
+	(fixed-point (newton-transform g) guess))
+
+
+(define (sqrt3 x)
+	(newtons-method (lambda (y) (- (square y) x)) 1.0))
+
+(print (sqrt3 2))
+(print (sqrt3 9))
+
+;再1.36
+(print (newtons-method (lambda (x) (- (expt x x) 1000)) 5.0))
+
+;1.40
+;x^3+ax^2+bx+c=0
+(define (cubic a b c)
+	(lambda (x)
+		(+ (cube x) (* a (square x)) (* b x) c)))
+
+(print (newtons-method (cubic 10 5 3) 1))
+
+;1.41
+(define (double f)
+	(lambda (x) (f (f x))))
+
+(print (((double (double double)) inc) 5))
+
+;1.42
+(define (my-compose f g)
+	(lambda (x) (f (g x))))
+
+(print ((my-compose square inc) 6))
+
+;composeはchicken-schemeに既に定義済み
+(print ((compose square inc) 6))
+
+;1.43
+(define (repeated f n)
+	(if (zero? n)
+		(lambda (x) x)
+		(compose f (repeated f (- n 1)))))
+
+(print ((repeated square 2) 5))
+
+
+;1.44
+;平滑化
+;xでの値がf(x-dx),f(x),f(x+dx)の平均である関数
+(define dx2 0.001)
+
+(define (smooth f)
+	(lambda (x)
+		(print x "----" (average (f x) (f (- x dx2)) (f (+ x dx2))))
+		(average (f x) (f (- x dx2)) (f (+ x dx2)))))
+
+(define (n-fold-smooth f n)
+	(repeated (smooth f) n))
+
+(print ((n-fold-smooth square 5) 2))
+
+
+;1.45

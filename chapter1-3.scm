@@ -425,10 +425,11 @@
 ;xでの値がf(x-dx),f(x),f(x+dx)の平均である関数
 (define dx2 0.001)
 
+
 (define (smooth f)
 	(lambda (x)
-		(print x "----" (average (f x) (f (- x dx2)) (f (+ x dx2))))
 		(average (f x) (f (- x dx2)) (f (+ x dx2)))))
+
 
 (define (n-fold-smooth f n)
 	(repeated (smooth f) n))
@@ -437,3 +438,64 @@
 
 
 ;1.45
+(define (average-damp f)
+	(lambda (x) (average x (f x))))
+
+;c -> 平均緩和の回数
+(define (n-root n x k)
+	(fixed-point ((repeated average-damp k) (lambda (y) (/ x (expt y (- n 1)))))
+		1.0))
+
+(print (n-root 2 4 1))
+
+(print (n-root 3 8 1))
+
+;(print (n-root 4 16 1)) ;NG
+(print (n-root 4 16 2))
+
+;(print (n-root 5 32 1)) ;NG
+(print (n-root 5 32 2))
+
+(print (n-root 6 64 1))
+;(print (n-root 6 64 2))
+
+(print (n-root 7 128 1))
+;(print (n-root 7 128 2))
+
+(print (n-root 8 256 1))
+;(print (n-root 8 256 3))
+
+(print (n-root 9 512 1))
+;(print (n-root 9 512 2))
+
+(print (n-root 10 1024 1))
+
+
+;1.46
+;反復改良法
+;不動点やニュートン法を一般的に
+(define (iterative-improve enough? improve)
+	(lambda (first-guess)
+		(define (iter g)
+			(if (enough? g)
+				g
+				(iter (improve g))))
+		(iter first-guess)))
+
+
+(define (sqrt4 x)
+	((iterative-improve (lambda (g) (< (abs (- (square g) x)) 0.001))
+		                (lambda (g) (average g (/ x g)))) 
+	 1.0))
+
+(print (sqrt4 2))
+(print (sqrt4 9))
+
+
+(define (fixed-point2 f first-guess)
+	((iterative-improve (lambda (g) (< (abs (- g (f g))) 0.00001))
+		                f)
+	 first-guess))
+
+(print (fixed-point2 cos 1.0))
+(print (fixed-point2 (lambda (y) (+ (sin y) (cos y))) 1.0))

@@ -510,11 +510,11 @@
 
 ;2.45
 (define (split op1 op2)
-	(lambda (painter n))
+	(lambda (painter n)
 		(if (= n 0)
 			painter
-			(let ((smaller (split painter (- n 1))))
-				(op1 painter (op2 smallr smaller)))))
+			(let ((smaller ((split op1 op2) painter (- n 1))))
+				(op1 painter (op2 smallr smaller))))))
 
 ;2.46
 (define (make-vect x y)
@@ -580,8 +580,8 @@
 			(lambda (segment)
 				(draw-line
 					((frame-coord-map frame) (start-segment segment))
-					((frame-coord-map frame) (end-segment segment)))
-			(segment-list)))))
+					((frame-coord-map frame) (end-segment segment))))
+			(segment-list))))
 
 
 (define outline-painter 

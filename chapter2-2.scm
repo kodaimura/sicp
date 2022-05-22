@@ -468,3 +468,137 @@
 		    (permutations (enumerate-interval 1 n))))
 
 (print (c2q41 5 7))
+
+;図形言語
+;(define wave2 (beside waev (flip-vert wave)))
+;(define wave4 (below wave2 wave2))
+
+(define (flipped-pairs painter)
+	(let ((painter2 (beside painter (flip-vert painter))))
+		(below painter2 painter2)))
+
+(define wave4 (flipped-pairs wave))
+
+(define (right-split painter n)
+	(if (= n 0)
+		painter
+		(let ((smaller (right-split painter (- n 1))))
+			(beside painter (below smaller smaller)))))
+
+(define (corner-split painter n)
+	(if (= n 0)
+		painter
+		(let ((up (up-split painter (- n 1)))
+			  (right (right-split painter (- n 1))))
+			(let ((top-left (beside up up))
+				  (bottom-right (below right right))
+				  (corner (corner-split painter (- n 1))))
+				(beside (below painter top-left)
+						(below bottom-right corner))))))
+
+(define (square-limit painter n)
+	(let ((quarter (corner-split painter n)))
+		(let ((half (beside (flip-horize quarter) quarter)))
+			(below (flip-vert half half)))))
+
+;2.44
+(define (up-split painer n)
+	(if (= n 0)
+		painter
+		(let ((smaller (up-split painter (- n 1))))
+			(below painter (beside smallr smaller)))))
+
+;2.45
+(define (split op1 op2)
+	(lambda (painter n))
+		(if (= n 0)
+			painter
+			(let ((smaller (split painter (- n 1))))
+				(op1 painter (op2 smallr smaller)))))
+
+;2.46
+(define (make-vect x y)
+	(list x y))
+
+(define (xcor-vect vect)
+	(car vect))
+
+(define (ycor-vect vect)
+	(cadr vect))
+
+(define (add-vect v1 v2)
+	(make-vect (+ (xcor-vect v1) (xcor-vect v2))
+			   (+ (ycor-vect v1) (ycor-vect v2))))
+
+(define (sub-vect v1 v2)
+	(make-vect (- (xcor-vect v1) (xcor-vect v2))
+			   (- (ycor-vect v1) (ycor-vect v2))))
+
+(define (scale-vect s v)
+	(make-vect (* s (xcor-vect v)) (* s (ycor-vect))))
+
+
+(define (frame-coord-map frame)
+	(lambda (v)
+		(add-vect
+			(origin-frame frame)
+			(add-vect (scale-vect (xcor-vect v)
+					  			  (edge1-frame frame))
+					  (scale-vect (ycor-vect v)
+					  			  (edge2-frame frame))))))
+
+
+;2.47
+(define (make-frame origin edge1 edge2)
+	(list origin edge1 edge2))
+
+(define (origin-frame frame)
+	(car frame))
+
+(define (edge1-frame frame)
+	(cadr frame))
+
+(define (edge2-frame frame)
+	(caddr frame))
+
+
+;2.48
+(define (make-segment s-seg e-seg)
+	(list s-seg e-seg))
+
+(define (start-segment seg)
+	(car seg))
+
+(define (end-segment seg)
+	(cadr seg))
+
+
+;2.49
+(define (segment->painter segment-list)
+	(lambda (frame)
+		(for-each
+			(lambda (segment)
+				(draw-line
+					((frame-coord-map frame) (start-segment segment))
+					((frame-coord-map frame) (end-segment segment)))
+			(segment-list)))))
+
+
+(define outline-painter 
+  (segments->painter 
+    (list (make-segment (make-vect 0 0) (make-vect 0 1))
+          (make-segment (make-vect 0 1) (make-vect 1 1))
+          (make-segment (make-vect 1 1) (make-vect 1 0))
+          (make-segment (make-vect 1 0) (make-vect 0 0)))))
+
+(define X-painter
+  (segments->painter
+    (list (make-segment (make-vect 0 0) (make-vect 1 1))
+          (make-segment (make-vect 1 0) (make-vect 0 1)))))
+
+(define diamond-painter
+  (segments->painter 
+    (list (make-segment (make-vect 0.5 0) (make-vect 1 0.5))
+          (make-segment (make-vect 1 0.5) (make-vect 0.5 1))
+          (make-segment (make-vect 0.5 1) (make-vect 0 0.5))
+          (make-segment (make-vect 0 0.5) (make-vect 0.5 0)))))

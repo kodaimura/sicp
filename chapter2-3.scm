@@ -1,4 +1,5 @@
 (import (r7rs))
+(import (chicken sort))
 
 ;記号データ
 
@@ -477,3 +478,30 @@
 
 
 (print (encode (list 'A 'D 'A 'B 'B 'C 'A) sample-tree))
+
+;2.69
+(define (generate-huffman-tree pairs)
+	(successive-merge (make-leaf-set pairs)))
+
+(define (successive-merge leaf-set)
+	(if (= 1 (length leaf-set))
+		(car leaf-set)
+		(let ((sorted (sort leaf-set (lambda (x y) (< (weight x) (weight y))))))
+       		(successive-merge 
+        		(cons (make-code-tree (car sorted) (cadr sorted))
+              		  (cddr sorted))))))
+
+(print (generate-huffman-tree 
+	(list (list 'A 4) (list 'C 1) (list 'B 2) (list 'D 1))))
+
+;2.70
+(define hufftree
+	(generate-huffman-tree
+		(list (list 'a 2) (list 'boom 1) (list 'get 2) (list 'job 2)
+			  (list 'na 16) (list 'sha 3) (list 'yip 9) (list 'wah 1))))
+
+(define enc (encode (list 'get 'a 'job 'sha 'na 'na
+	                 'na 'na 'na 'na 'na 'na) hufftree))
+
+(print enc)
+(print (decode enc hufftree))

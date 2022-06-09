@@ -4,14 +4,14 @@
 
 ;複素数の表現
 (define (add-complex z1 z2)
-	(make-from-real-image
+	(make-from-real-imag
 		(+ (real-part z1) (real-part z2))
-		(+ (image-part z1) (image-part z2))))
+		(+ (imag-part z1) (imag-part z2))))
 
 (define (sub-complex z1 z2)
-	(make-from-real-image
+	(make-from-real-imag
 		(- (real-part z1) (real-part z2))
-		(- (image-part z1) (image-part z2))))
+		(- (imag-part z1) (imag-part z2))))
 
 (define (mul-complex z1 z2)
 	(make-from-mag-ang
@@ -26,16 +26,16 @@
 
 (define (real-part z) (car z))
 
-(defin (image-part z) (cdr z))
+(defin (imag-part z) (cdr z))
 
 (define (magnitude z)
 	(sqrt (+ (square (real-part z))
-		     (square (image-part z)))))
+		     (square (imag-part z)))))
 
 (define (angle z)
-	(atan (image-part z) (real-part z)))
+	(atan (imag-part z) (real-part z)))
 
-(define (make-from-real-image x y) (cons x y))
+(define (make-from-real-imag x y) (cons x y))
 
 (define (make-from-mag-ang r a)
 	(cons (* r (cos a)) (* r (sin a))))
@@ -44,14 +44,14 @@
 (define (real-part z) 
 	(* (magnitude z) (cos (angle z))))
 
-(defin (image-part z) 
+(defin (imag-part z) 
 	(* (magnitude z) (sin (angle z))))
 
 (define (magnitude z) (car z))
 
 (define (angle z) (cdr z))
 
-(define (make-from-real-image x y) 
+(define (make-from-real-imag x y) 
 	(cons (sqrt (+ (square x) (square y)))
 		  (atan y x)))
 
@@ -81,17 +81,17 @@
 
 (define (real-part-rectangular z) (car z))
 
-(define (image-part-rectangular z) (cdr z))
+(define (imag-part-rectangular z) (cdr z))
 
 (define (magnitude-rectangular z)
 	(sqrt (+ (square (real-part-rectangular z))
-		     (square (image-part-rectangular z)))))
+		     (square (imag-part-rectangular z)))))
 
 (define (angle-rectangular z)
-	(atan (image-part-rectangular z)
+	(atan (imag-part-rectangular z)
 	      (real-part-rectangular z)))
 
-(define (make-from-real-image-rectangular x y) 
+(define (make-from-real-imag-rectangular x y) 
 	(attach-tag 'rectangular (cons x y)))
 
 (define (make-from-mag-ang-rectangular r a)
@@ -102,14 +102,14 @@
 (define (real-part-polar z) 
 	(* (magnitude-polar z) (cos (angle-polar z))))
 
-(defin (image-part-polar z) 
+(defin (imag-part-polar z) 
 	(* (magnitude-polar z) (sin (angle-polar z))))
 
 (define (magnitud-polare z) (car z))
 
 (define (angle-polar z) (cdr z))
 
-(define (make-from-real-image-polar x y) 
+(define (make-from-real-imag-polar x y) 
 	(attach-tag 'polar
 		(cons (sqrt (+ (square x) (square y)))
 			  (atan y x))))
@@ -126,13 +126,13 @@
 			(real-part-polar (contents z)))
 		(else (error "Unknown type -- REAL-PART" z))))
 
-(define (image-part z)
+(define (imag-part z)
 	(cond
 		((rectangular? z)
-			(image-part-rectangular (contents z)))
+			(imag-part-rectangular (contents z)))
 		((polar? z)
-			(image-part-polar (contents z)))
-		(else (error "Unknown type -- IMAGE-PART" z))))
+			(imag-part-polar (contents z)))
+		(else (error "Unknown type -- imag-PART" z))))
 
 (define (magnitude z)
 	(cond
@@ -153,3 +153,79 @@
 
 ;汎用的な実装となったが、複素数の表現が二つでなく、数百あるとすると大変
 ;さらに部品化するデータ主導プログラミングが必要
+;データ主導プログラミングは省略
+
+
+;メッセージパッシング
+(define (make-from-real-imag x y)
+	(define (dispatch op)
+		(cond
+			((eq? op 'real-part) x)
+			((eq? op 'imag-part) y)
+			((eq? op 'magnitude)
+				(sqrt (+ (square x) (square y))))
+			((eq? op 'angle) (atan y x))
+			(else
+				(error "Unknown op -- MAKE-FROM-REAL-IMAG" op))))
+	dispatch)
+
+(define (apply-generic op arg) (arg op))
+
+;2.75
+(define (make-from-mag-ang r a)
+	(define (dispatch op)
+		(cond
+			((eq? op 'real-part) (* r (cos a)))
+			((eq? op 'imag-part) (* r (sin a)))
+			((eq? op 'magnitude) r)
+			((eq? op 'angle) a)
+			(else
+				(error "Unknown op -- MAKE-FROM-REAL-IMAG" op))))
+	dispatch)
+
+;汎用算術演算
+#|
+(define (add x y) (apply-generic 'add x y))
+
+(define (sub x y) (apply-generic 'sub x y))
+
+(define (mul x y) (apply-generic 'mul x y))
+
+(define (div x y) (apply-generic 'div x y))
+
+(define (install-scheme-number-package)
+	(define (tag x)
+		(attach-tag 'scheme-number x))
+	(put 'add '(scheme-number scheme-number)
+		(lambda (x y) (tag (+ x y))))
+	(put 'sub '(scheme-number scheme-number)
+		(lambda (x y) (tag (- x y))))
+	(put 'mul '(scheme-number scheme-number)
+		(lambda (x y) (tag (* x y))))
+	(put 'div '(scheme-number scheme-number)
+		(lambda (x y) (tag (/ x y))))
+	(put 'make 'scheme-number
+		(lambda (x) (tag x)))
+	'done)
+
+(define (make-scheme-number n)
+	((get 'make scheme-number) n))
+|#
+
+;2.78
+(define (type-tag datum)
+	(cond 
+		((number? datum) 'scheme-number)
+     	((pair? datum) (car datum))
+        (else (error "Bad tagged datum -- TYPE-TAG" datum))))
+
+(define (contents datum)
+  	(cond 
+  		((number? datum) datum)
+    	((pair? datum) (cdr datum))
+        (else (error "Bad tagged datum -- CONTENTS" datum))))
+
+(define (attach-tag tag-type contents)
+  	(if (eq? tag-type 'scheme-number)
+  		contents
+      	(cons tag-type contents)))

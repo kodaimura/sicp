@@ -1,4 +1,7 @@
 (import (r7rs))
+(import (chicken random))
+
+(define random pseudo-random-integer)
 
 ;balanceはどこからでもアクセスできてしまう
 (define balance 100)
@@ -134,9 +137,115 @@
 (print ((acc3 'pass 'withdraw) 50))
 
 (print ((acc3 'pa 'deposit) 60))
-(print ((acc3 'pa 'deposit) 60))
-(print ((acc3 'pa 'deposit) 60))
-(print ((acc3 'pa 'deposit) 60))
-(print ((acc3 'pa 'deposit) 60))
-(print ((acc3 'pa 'deposit) 60))
-(print ((acc3 'pa 'deposit) 60))
+
+
+(define random-init 1)
+
+;ランダムではないが、とりあえずで
+(define (rand-update x)
+	(+ x 2))
+
+(define rand
+	(let ((x random-init))
+		(lambda ()
+			(set! x (rand-update x))
+			x)))
+
+(define (estimate-pi trials)
+	(sqrt (/ 6 (monte-calro trials cesaro-test))))
+
+(define (cesaro-test)
+	(= (gcd (rand) (rand)) 1))
+
+(define (monte-carlo trials experiment)
+	(define (iter trials-remaining trials-passed)
+		(cond
+			((= trials-remaining 0)
+				(/ trials-passed trials))
+			((experiment)
+				(iter (- trials-remaining 1) (+ trials-passed 1)))
+			(else
+				(iter (- trials-remaining 1) trials-passed))))
+	(iter trials 0))
+
+;3.5
+(define (random-in-range low high)
+	(let ((range (- high low)))
+		(+ low (random range))))
+
+(define (area-of-circle P x1 x2 y1 y2 trials)
+	(define (test)
+		(let ((x (random-in-range x1 x2))
+			  (y (random-in-range y1 y2)))
+			(P x y)))
+	(let ((ratio (monte-carlo trials test)))
+		(* (- x2 x1) (- y2 y1) ratio)))
+
+(print (area-of-circle 
+			(lambda (x y) (<= (+ (square (- x 5)) (square (- y 7))) 9))
+			2 8 4 10
+			1000))
+
+;3.6
+(define rand
+	(let ((x 0))
+		(lambda (op)
+			(cond
+				((eq? op 'generate) 
+					(begin (set! x (rand-update x)) x))
+				((eq? op 'reset) 
+					(lambda (new-value) (set! x new-value) x))
+				(else (error "Unknown request -- RAND" op))))))
+
+(print (rand 'generate))
+(print (rand 'generate))
+(print ((rand 'reset) 10))
+(print (rand 'generate))
+
+
+;3.7
+(define (make-account balance password)
+	(define (withdraw amount)
+		(if (>= balance amount)
+			(begin (set! balance (- balance amount))
+				balance)
+			"Insufficient funds"))
+	(define (deposit amount)
+		(set! balance (+ balance amount)))
+	(define (error-message x) "Incorrect password")
+	(define (check-password p) (eq? p password))
+	(define (dispatch p m)
+		(cond
+			((eq? m 'joint) (check-password p))
+			((not (check-password p)) error-message)
+			((eq? m 'withdraw) withdraw)
+			((eq? m 'deposit) deposit)
+			(else (error "Unknown request -- MAKE-ACCOUNT" m))))
+	dispatch)
+
+(define (make-joint acc acc-pass joint-pass)
+	(define (joint p m)
+		(if (eq? joint-pass p)
+			(acc acc-pass m)
+			(acc #f m)))
+	(if (acc acc-pass 'joint)
+		joint
+		"Incorrect joint password"))
+
+(define a1 (make-account 100 'accpass))
+(define a1joint1 (make-joint a1 'accpass 'jointpass))
+
+(print (make-joint a1 'accpa 'jointpass2))
+(print ((a1 'accpass 'deposit) 50))
+(print ((a1joint1 'jointpass 'withdraw) 30))
+(print ((a1joint1 'accpa 'withdraw) 30))
+
+
+;3.8
+(define f
+	(let ((x 0))
+		(lambda (n)
+			(if (= x 0) (begin (set! x 1) n) 0))))
+
+(print (+ (f 1) (f 0)))
+(print (+ (f 0) (f 1)))

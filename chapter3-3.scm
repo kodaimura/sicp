@@ -408,3 +408,180 @@
 					     (memo-fib (- n 2))))))))
 
 (print (memo-fib 10))
+
+;ディジタル回路のシュミレータ
+
+;3.28
+(define inverter-delay 1)
+(define and-gate-delay 1)
+(define or-gate-delay 1)
+
+(define (after-delay sec proc)
+	;wait sec[s]
+	(proc))
+
+(define (logical-not s)
+	(cond 
+		((= s 0) 1)
+		((= s 1) 0)
+		(else (error "Invalid signal" s))))
+
+(define (logical-and s1 s2)
+	(cond 
+		((and (= s1 1) (= s2 1)) 1)
+		((or (= s1 0) (= s2 0)) 0)
+		(else (error "Invalid signal" (cons s1 s2)))))
+
+(define (logical-or s1 s2)
+	(cond 
+		((or (= s1 1) (= s2 1)) 1)
+		((and (= s1 0) (= s2 0)) 0)
+		(else (error "Invalid signal" (cons s1 s2)))))
+
+
+(define (make-wire) (cons 0 '()))
+
+(print (make-wire))
+
+(define (get-signal wire)
+	(car wire))
+
+(define (set-signal! wire value)
+	(set-car! wire value))
+
+(define (add-action! wire proc)
+	(set-cdr! wire (cons proc (cdr wire))))
+
+(define (inverter input output)
+	(define (invert-input)
+		(let ((new-value (logical-not (get-signal input))))
+			(after-delay inverter-delay
+				(lambda ()
+					(set-signal! output new-value)))))
+	(add-action! input invert-input)
+	'ok)
+
+(define (and-gate a1 a2 output)
+	(define (and-action-procedure)
+		(let ((new-value
+			    (logical-and (get-signal a1) (get-signal a2))))
+			(after-delay and-gate-delay
+				(lambda ()
+					(set-signal! output new-value)))))
+	(add-action! a1 and-action-procedure)
+	(add-action! a2 and-action-procedure)
+	'ok)
+
+(define (or-gate a1 a2 output)
+	(define (or-action-procedure)
+		(let ((new-value
+			    (logical-or (get-signal a1) (get-signal a2))))
+			(after-delay or-gate-delay
+				(lambda ()
+					(set-signal! output new-value)))))
+	(add-action! a1 or-action-procedure)
+	(add-action! a2 or-action-procedure)
+	'ok)
+
+(define a (make-wire))
+(define b (make-wire))
+(define c (make-wire))
+(define d (make-wire))
+(define e (make-wire))
+(define f (make-wire))
+(define g (make-wire))
+(define h (make-wire))
+(define i (make-wire))
+
+(and-gate a b c)
+(print a)
+(print b)
+(print c)
+
+(or-gate d e f)
+(print d)
+(print e)
+(print f)
+
+;3.29
+(define (or-gate a1 a2 output)
+	(inverter a1 a1)
+	(inverter a2 a2)
+	(and-gate a1 a2 output)
+	(inverter output output)
+	'ok)
+
+(or-gate g h i)
+(print g)
+(print h)
+(print i)
+
+;次第書き
+(define (make-time-segment time queue)
+	(cons time queue))
+
+(define (segment-time s) (car s))
+
+(define (segment-queue s) (cdr s))
+
+(define (make-agenda) (list 0))
+
+(define (current-time agenda) (car agenda))
+
+(define (set-current-time! agenda time)
+	(set-car! agenda time))
+
+(define (segments agenda) (cdr agenda))
+
+(define (set-segment! agenda segments)
+	(set-cdr! agenda segments))
+
+(define (first-segment agenda) (car (segments agenda)))
+
+(define (rest-segment agenda) (cdr (segments agenda)))
+
+(define (empty-agenda? agenda)
+	(null? (segments agenda)))
+
+
+(define (add-to-agenda! time action agenda)
+	(define (belongs-before? segments)
+		(or (null? segments)
+			(< time (segment-time (car segments)))))
+	(define (make-new-time-segment time action)
+		(let ((q (make-queue)))
+			(insert-queue! q action)
+			(make-time-segment time q)))
+	(define (add-to-segments! segments)
+		(if (= (segment-time (car segments)) time)
+			(insert-queue! (segment-queue (car segments))
+				           action)
+			(let ((rest (cdr segments)))
+				(if (belongs-before? rest)
+					(set-cdr! segments 
+						(cons (make-new-time-segment time action)
+							  (cdr segments)))
+					(add-to-segments! rest)))))
+	(let ((segments (segments agenda)))
+		(if (belongs-before? segments)
+			(set-segments! agenda
+				(cons (make-new-time-segment time action)
+					  segments))
+			(add-to-segments! segments))))
+
+
+(define (remove-first-agenda-item! agenda)
+	(let ((q (segment-queue (first-segments agenda))))
+		(delete-queue! q)
+		(if (empty-queue? q)
+			(set-segments! agenda (rest-segments agenda)))))
+
+
+(define (first-agenda-item agenda)
+	(if (empty-agenda? agenda)
+		(error "Agenda is empty -- FIRST-AGENDA-ITEM")
+		(let ((first-seg (first-segment agenda)))
+			(set-current-time! agenda (segment-time first-seg))
+			(front-queue (segment-queue first-seg)))))
+
+

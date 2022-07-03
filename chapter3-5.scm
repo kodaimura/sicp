@@ -4,15 +4,6 @@
 (define a (delay (car '(1 2 3))))
 (print (force a))
 
-(define (delay expo)
-	(lambda () expo))
-
-(define (force delayed-object)
-	(delayed-object))
-
-(define a (delay (car '(1 2 3))))
-(print (force a))
-
 (define (memo-proc proc)
 	(let ((already-run? #f) (result #f))
 		(lambda ()
@@ -25,9 +16,16 @@
 (define (delay expo)
 	(memo-proc (lambda () expo)))
 
-(define a (delay (car '(1 2 3))))
-(print (force a))
+(define (force delayed-object)
+	(delayed-object))
 
+(define-syntax delay
+	(syntax-rules ()
+    	((_ exp) (lambda () exp))))
+
+(define-syntax cons-stream
+	(syntax-rules ()
+		((_ a b) (cons a (delay b)))))
 
 (define (stream-car stream)
 	(car stream))
@@ -35,8 +33,6 @@
 (define (stream-cdr stream)
 	(force (cdr stream)))
 
-(define (cons-stream a b)
-	(cons a (delay  b)))
 
 (define (stream-null? stream)
 	(null? stream))
@@ -114,3 +110,95 @@
 
 (print (stream-ref y 7))
 (display-stream z)
+(newline)
+
+;無限ストリーム
+(define (integers-starting-from n)
+	(cons-stream n (integers-starting-from (+ n 1))))
+
+(define integers (integers-starting-from 1))
+
+(define (divisible? x y)
+	(= (remainder x y) 0))
+
+(print integers)
+
+(define no-sevens
+	(stream-filter (lambda (x) (not (divisible? x 7)))
+		integers))
+
+(define (fibgen a b)
+	(cons-stream a (fibgen b (+ a b))))
+
+(define fibs (fibgen 0 1))
+
+(print (stream-ref integers 3))
+(print (stream-ref fibs 3))
+
+
+(define ones (cons-stream 1 ones))
+
+(define (add-streams s1 s2)
+	(stream-map + s1 s2))
+
+(define integers (cons-stream 1 (add-streams ones integers)))
+
+(define fibs
+	(cons-stream 0
+		(cons-stream 1
+			(add-streams (stream-cdr fibs)
+				fibs))))
+
+(print (stream-ref integers 3))
+(print (stream-ref fibs 3))
+
+
+(define (scale-stream stream factor)
+	(stream-map (lambda (x) (* x factor)) steram))
+
+(define double (cons-stream 1 (scale-stream double 2)))
+
+
+;3.53
+(define s (cons-stream 1 (add-streams s s)))
+#|
+1
+2
+4
+8
+16
+|#
+(print (stream-ref s 0))
+(print (stream-ref s 1))
+(print (stream-ref s 2))
+(print (stream-ref s 3))
+(print (stream-ref s 4))
+
+
+;3.54
+(define (mul-streams s1 s2)
+	(stream-map * s1 s2))
+
+(define factorials
+	(cons-stream 1 (mul-streams integers (stream-cdr integers))))
+
+(print (stream-ref factorials 0))
+(print (stream-ref factorials 1))
+(print (stream-ref factorials 2))
+(print (stream-ref factorials 3))
+(print (stream-ref factorials 4))
+
+
+;3.55
+(define (partial-sums s)
+	(define s1 (cons-stream (stream-car s) 
+		(add-streams (stream-cdr s) s1)))
+	s1)
+
+(define ss (partial-sums integers))
+
+(print (stream-ref ss 0))
+(print (stream-ref ss 1))
+(print (stream-ref ss 2))
+(print (stream-ref ss 3))
+(print (stream-ref ss 4))

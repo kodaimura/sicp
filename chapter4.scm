@@ -263,6 +263,48 @@
                      (expand-clauses rest))))))
 
 
+;4.6
+(define (let? exp) (tagged-list? exp 'let))
+
+(define (let-bindings exp) (cadr exp))
+
+(define (let-body exp) (cddr exp))
+
+(define (let->combination exp)
+	(let ((bindings (cadr exp) (body (cddr exp))))
+  	(cons (make-lambda (map car bindings) body)
+        	(map cadr bindings))))
+
+
+;4.7
+(define (make-let bindings body)
+	(let->combination (list 'let bindings body)))
+
+(define (let*? exp) (tagged-list? exp 'let*))
+
+(define (let*->nested-lets exp)
+	(define (iter bindings body)
+		(if (null? bindings)
+			  (sequence->exp body)
+			  (make-let (list (car bindings))
+			  	        (iter (cdr bindings) body))))
+	(iter (cadr exp) (cddr exp)))
+
+
+;4.8
+(define (let->combination exp)
+  (if (symbol? (cadr exp))
+    (let ((tag (cadr exp)) 
+    	    (bindings (caddr exp)) 
+    	    (body (cdddr exp)))
+      (list (list 'lambda '()
+              (cons 'define (cons (cons tag (map car bindings)) body))
+              	(cons tag (map cadr bindings)))))
+  	(let ((bindings (cadr exp)) (body (cddr exp)))
+   		(cons (make-lambda (map car bindings) body)
+    		(map cadr bindings)))))
+
+
 (define (eval exp env)
 	(cond 
 		((self-evaluating? exp) exp)
@@ -280,7 +322,141 @@
 		((cond? exp) (eval (cond->if exp) env))
 		((and? exp) (eval-and exp env))
 		((or? exp) (eval-or exp env))
+		((let? exp) (eval (let->combination exp) env))
+		((let*? exp) (eval (let*->nested-lets exp) env))
 		((application? exp)
 			(apply (eval (operator exp) env)
 				     (list-of-values (operands exp) env)))
 		(else (error "Unknown expression type -- EVAL" exp))))
+
+
+;手続きの表現
+(define (make-procedure parameters body env)
+  (list 'procedure parameters body env))
+
+(define (compound-procedure? p)
+  (tagged-list? p 'procedure))
+
+(define (procedure-parameters p) (cadr p))
+
+(define (procedure-body p) (caddr p))
+
+(define (procedure-environment p) (cadddr p))
+
+;環境に対する操作
+
+;環境の外側の環境
+(define (enclosing-environment env) (cdr env))
+
+(define (first-frame env) (car env))
+
+(define the-empty-environment '())
+
+(define (make-frame variables values)
+  (cons variables values))
+
+(define (frame-variables frame) (car frame))
+
+(define (frame-values frame) (cdr frame))
+
+(define (add-binding-to-frame! var val frame)
+  (set-car! frame (cons var (car frame)))
+  (set-cdr! frame (cons val (cdr frame))))
+
+(define (extend-environment vars vals base-env)
+  (if (= (length vars) (length vals))
+      (cons (make-frame vars vals) base-env)
+      (if (< (length vars) (length vals))
+          (error "Too many arguments supplied" vars vals)
+          (error "Too few arguments supplied" vars vals))))
+
+#|
+(define (lookup-variable-value var env)
+  (define (env-loop env)
+    (define (scan vars vals)
+      (cond ((null? vars)
+             (env-loop (enclosing-environment env)))
+            ((eq? var (car vars))
+             (car vals))
+            (else (scan (cdr vars) (cdr vals)))))
+    (if (eq? env the-empty-environment)
+        (error "Unbound variable" var)
+        (let ((frame (first-frame env)))
+          (scan (frame-variables frame)
+                (frame-values frame)))))
+  (env-loop env))
+
+(define (set-variable-value! var val env)
+  (define (env-loop env)
+    (define (scan vars vals)
+      (cond ((null? vars)
+             (env-loop (enclosing-environment env)))
+            ((eq? var (car vars))
+             (set-car! vals val))
+            (else (scan (cdr vars) (cdr vals)))))
+    (if (eq? env the-empty-environment)
+        (error "Unbound variable -- SET!" var)
+        (let ((frame (first-frame env)))
+          (scan (frame-variables frame)
+                (frame-values frame)))))
+  (env-loop env))
+
+(define (define-variable! var val env)
+  (let ((frame (first-frame env)))
+    (define (scan vars vals)
+      (cond ((null? vars)
+             (add-binding-to-frame! var val frame))
+            ((eq? var (car vars))
+             (set-car! vals val))
+            (else (scan (cdr vars) (cdr vals)))))
+    (scan (frame-variables frame)
+          (frame-values frame))))
+
+|#
+
+;4.12
+(define (env-loop env var proc-find error-msg) 
+  (define (scan vars vals)
+    (cond ((null? vars)
+    				(env-loop (enclosing-environment env)))
+          ((eq? var (car vars))
+            (proc-find vals))
+          (else (scan (cdr vars) (cdr vals))))
+  (if (eq? env the-empty-environment)
+      (error error-msg var)
+      (let ((frame (first-frame env)))
+        (scan (frame-variables frame)
+              (frame-values frame))))))
+
+(define (lookup-variable-value var env)
+  (env-loop env 
+  	        var 
+  	        car
+  	        "Unbound variable"))
+
+(define (set-variable-value! var val env)
+  (env-loop env
+  	        var
+  	        (lambda (vals) (set-car! vals val))
+  	        "Unbound variable -- SET!"))
+
+(define (define-variable! var val env)
+  (let ((frame (first-frame env)))
+    (define (scan vars vals)
+      (cond ((null? vars)
+             (add-binding-to-frame! var val frame))
+            ((eq? var (car vars))
+             (set-car! vals val))
+            (else (scan (cdr vars) (cdr vals)))))
+    (scan (frame-variables frame)
+          (frame-values frame)))
+
+(define (define-variable! var val env)
+	(let ((frame (first-frame env)))
+  	(env-loop var 
+              (list frame)
+            	(lambda (vals) (set-car! vals val)) 
+            	(lambda (env) (add-binding-to-frame! var val frame))
+              "")))
+
+;4.13

@@ -271,7 +271,7 @@
 (define (let-body exp) (cddr exp))
 
 (define (let->combination exp)
-	(let ((bindings (cadr exp) (body (cddr exp))))
+	(let ((bindings (cadr exp)) (body (cddr exp)))
   	(cons (make-lambda (map car bindings) body)
         	(map cadr bindings))))
 
@@ -415,10 +415,9 @@
 |#
 
 ;4.12
-(define (env-loop env var proc-find error-msg) 
+(define (env-loop var env proc-find proc-null error-msg) 
   (define (scan vars vals)
-    (cond ((null? vars)
-    				(env-loop (enclosing-environment env)))
+    (cond ((null? vars) (proc-null env))
           ((eq? var (car vars))
             (proc-find vals))
           (else (scan (cdr vars) (cdr vals))))
@@ -428,35 +427,222 @@
         (scan (frame-variables frame)
               (frame-values frame))))))
 
+#|
 (define (lookup-variable-value var env)
-  (env-loop env 
-  	        var 
+  (env-loop var 
+  	        env
   	        car
+  	        (lookup-variable-value var (enclosing-environment env)
   	        "Unbound variable"))
+|#
 
 (define (set-variable-value! var val env)
-  (env-loop env
-  	        var
+  (env-loop var
+  	        env
   	        (lambda (vals) (set-car! vals val))
+  	        (set-variable-value! var val (enclosing-environment env))
   	        "Unbound variable -- SET!"))
 
-(define (define-variable! var val env)
-  (let ((frame (first-frame env)))
-    (define (scan vars vals)
-      (cond ((null? vars)
-             (add-binding-to-frame! var val frame))
-            ((eq? var (car vars))
-             (set-car! vals val))
-            (else (scan (cdr vars) (cdr vals)))))
-    (scan (frame-variables frame)
-          (frame-values frame)))
 
 (define (define-variable! var val env)
 	(let ((frame (first-frame env)))
-  	(env-loop var 
-              (list frame)
+  	(env-loop var
+  						(list frame)
             	(lambda (vals) (set-car! vals val)) 
             	(lambda (env) (add-binding-to-frame! var val frame))
               "")))
 
 ;4.13
+(define (unbind! var env)
+	(let ((frame (first-frame env)))
+    (define (scan vars vals)
+      (cond ((null? vars))
+            ((eq? var (car vars)) (set-car! vals '()))
+            (else (scan (cdr vars) (cdr vals)))))
+    (scan (frame-variables frame)
+          (frame-values frame))))
+
+
+;評価器をプログラムとして走らせる
+
+(define primitive-procedures
+  (list (list '* *)
+        (list '+ +)
+        (list '- -)
+        (list '/ /)
+        (list '< <)
+        (list '= =)
+        (list '> >)
+        (list 'car car)
+        (list 'cdr cdr)
+        (list 'cons cons)
+        (list 'eq? eq?)
+        (list 'list list)
+        (list 'not not)
+        (list 'null? null?)
+        ))
+
+(define (primitive-procedure-objects)
+  (map (lambda (proc) (list 'primitive (cadr proc)))
+       primitive-procedures))
+
+(define (primitive-procedure-names)
+  (map car
+       primitive-procedures))
+
+(define (primitive-procedure? proc)
+  (tagged-list? proc 'primitive))
+
+(define (primitive-implementation proc) (cadr proc))
+
+(define (setup-environment)
+  (let ((initial-env
+         (extend-environment (primitive-procedure-names)
+                             (primitive-procedure-objects)
+                             the-empty-environment)))
+    (define-variable! 'true #t initial-env)
+    (define-variable! 'false #f initial-env)
+    initial-env))
+
+(define the-global-environment (setup-environment))
+
+
+;4.16
+(define (lookup-variable-value var env)
+  (define (env-loop env)
+    (define (scan vars vals)
+      (cond ((null? vars)
+             (env-loop (enclosing-environment env)))
+            ((eq? var (car vars))
+             (if (eq? (car vals) '*unassigned*)
+             	   (error "Unassigned variable" var)
+             	   (car vals)))
+            (else (scan (cdr vars) (cdr vals)))))
+    (if (eq? env the-empty-environment)
+        (error "Unbound variable" var)
+        (let ((frame (first-frame env)))
+          (scan (frame-variables frame)
+                (frame-values frame)))))
+  (env-loop env))
+
+
+(define (scan-out-of-defines proc-body)
+	(let ((lets '())
+		    (sets '()))
+		(define (scan body)
+			(cond
+				((tagged-list? (car body) 'define)
+					(set! lets (cons (list (cadar body) '*unassigned*) lets))
+					(set! sets (cons (list 'set! (cadar body) (caddar body)) sets))
+					(scan (cdr body)))
+				(else (car body))))
+		(let ((body (scan (lambda-body proc-body))))
+			(list (car proc-body) (cadr proc-body)
+				(list 'let lets)
+					(cons 'begin (append sets (list body)))))))
+
+
+(print (scan-out-of-defines
+	'(lambda (x)
+		(define y 2)
+		(define z 3)
+		(print (+ x y x)))))
+		
+
+(define (make-procedure parameters body env)
+  (list 'procedure parameters 
+  	     (scan-out-of-defines body) env))
+
+
+;構文解析を実行から分離
+(define (eval exp env)
+  ((analyze exp) env))
+
+;4.22
+(define (analyze exp)
+  (cond ((self-evaluating? exp) 
+         (analyze-self-evaluating exp))
+        ((quoted? exp) (analyze-quoted exp))
+        ((variable? exp) (analyze-variable exp))
+        ((assignment? exp) (analyze-assignment exp))
+        ((definition? exp) (analyze-definition exp))
+        ((if? exp) (analyze-if exp))
+        ((lambda? exp) (analyze-lambda exp))
+        ((begin? exp) (analyze-sequence (begin-actions exp)))
+        ((cond? exp) (analyze (cond->if exp)))
+        ((let? exp) (analyze (let->combination exp)))
+        ((application? exp) (analyze-application exp))
+        (else
+         (error "Unknown expression type -- ANALYZE" exp))))
+
+(define (analyze-self-evaluating exp)
+  (lambda (env) exp))
+
+(define (analyze-quoted exp)
+  (let ((qval (text-of-quotation exp)))
+    (lambda (env) qval)))
+
+(define (analyze-variable exp)
+  (lambda (env) (lookup-variable-value exp env)))
+
+(define (analyze-assignment exp)
+  (let ((var (assignment-variable exp))
+        (vproc (analyze (assignment-value exp))))
+    (lambda (env)
+      (set-variable-value! var (vproc env) env)
+      'ok)))
+
+(define (analyze-definition exp)
+  (let ((var (definition-variable exp))
+        (vproc (analyze (definition-value exp))))
+    (lambda (env)
+      (define-variable! var (vproc env) env)
+      'ok)))
+
+(define (analyze-if exp)
+  (let ((pproc (analyze (if-predicate exp)))
+        (cproc (analyze (if-consequent exp)))
+        (aproc (analyze (if-alternative exp))))
+    (lambda (env)
+      (if (true? (pproc env))
+          (cproc env)
+          (aproc env)))))
+
+(define (analyze-lambda exp)
+  (let ((vars (lambda-parameters exp))
+        (bproc (analyze-sequence (lambda-body exp))))
+    (lambda (env) (make-procedure vars bproc env))))
+
+(define (analyze-sequence exps)
+  (define (sequentially proc1 proc2)
+    (lambda (env) (proc1 env) (proc2 env)))
+  (define (loop first-proc rest-procs)
+    (if (null? rest-procs)
+        first-proc
+        (loop (sequentially first-proc (car rest-procs))
+              (cdr rest-procs))))
+  (let ((procs (map analyze exps)))
+    (if (null? procs)
+        (error "Empty sequence -- ANALYZE"))
+    (loop (car procs) (cdr procs))))
+
+(define (analyze-application exp)
+  (let ((fproc (analyze (operator exp)))
+        (aprocs (map analyze (operands exp))))
+    (lambda (env)
+      (execute-application (fproc env)
+                           (map (lambda (aproc) (aproc env))
+                                aprocs)))))
+
+(define (execute-application proc args)
+  (cond ((primitive-procedure? proc)
+         (apply-primitive-procedure proc args))
+        ((compound-procedure? proc)
+         ((procedure-body proc)
+          (extend-environment (procedure-parameters proc)
+                              args
+                              (procedure-environment proc))))
+        (else
+         (error
+          "Unknown procedure type -- EXECUTE-APPLICATION"
+          proc))))
